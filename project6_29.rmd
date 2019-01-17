@@ -1,0 +1,604 @@
+---
+editor_options:
+  chunk_output_type: console
+output:
+  html_document: default
+  #pdf_document: default
+  title: "Red Wine Quality Analysis"
+author: BEIRAN CHEN
+date: DEC 28, 2018
+---
+```{r, echo=FALSE}
+
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+RED WINE QUALITY ANALYSIS 
+by Beiran Chen
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(ggplot2)
+library(gridExtra)
+library(GGally)
+library(corrplot)
+```
+Get known about the dataset structure.
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+pfwine <- read.csv('wineQualityReds.csv')
+str(pfwine) #dataset structure
+```
+This dataset has 1599 objects, and 13 variables. The names of variables:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, names}
+names(pfwine)
+```
+
+ Description of variables:
+ Ref:(https://s3.amazonaws.com/udacity-hosted-downloads/ud651/wineQualityInfo.txt)
+
+   1 - index
+   2 - fixed acidity (tartaric acid - g / dm^3): most acids involved with wine or fixed or nonvolatile (do not evaporate readily)
+
+   3 - volatile acidity (acetic acid - g / dm^3): the amount of acetic acid in wine, which at too high of levels can lead to an unpleasant, vinegar taste
+
+   4 - citric acid (g / dm^3): found in small quantities, citric acid can add 'freshness' and flavor to wines
+
+   5 - residual sugar (g / dm^3): the amount of sugar remaining after fermentation stops, it's rare to find wines with less than 1 gram/liter and wines with greater than 45 grams/liter are considered sweet
+
+   6 - chlorides(sodium chloride - g / dm^3): the amount of salt in the wine
+
+   7 - free sulfur dioxide (mg / dm^3): the free form of SO2 exists in equilibrium between molecular SO2 (as a dissolved gas) and bisulfite ion; it prevents microbial growth and the oxidation of wine
+
+   8 - total sulfur dioxid (mg / dm^3)e: amount of free and bound forms of S02; in low concentrations, SO2 is mostly undetectable in wine, but at free SO2 concentrations over 50 ppm, SO2 becomes evident in the nose and taste of wine
+
+   9 - density (g / cm^3): the density of water is close to that of water depending on the percent alcohol and sugar content
+
+   10 - pH: describes how acidic or basic a wine is on a scale from 0 (very acidic) to 14 (very basic); most wines are between 3-4 on the pH scale
+
+   11 - sulphates (potassium sulphate - g / dm3): a wine additive which can contribute to sulfur dioxide gas (S02) levels, wich acts as an antimicrobial and antioxidant
+
+   12 - alcohol (% by volume): the percent alcohol content of the wine
+
+   
+   13 - quality (score between 0 and 10), this is output variable (based on sensory data)
+
+
+We want to check if there are some missing value
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#any(is.na(x) | is.infinite(x))
+apply(pfwine,2,function(x){sum(is.na(x))})
+```
+So there is no missing value.
+
+
+# Univariate Analysis
+
+At first, we plot every variable distribution histogram:
+
+```{r echo=FALSE, message=FALSE,  warning=FALSE}
+#create a function to plot histrogram for univariate
+uni_histo <- function(xvariable,labx)
+{
+  ggplot(data = pfwine, aes(x = xvariable)) + 
+  geom_histogram()+
+  xlab(labx)
+}
+
+p1 <- uni_histo(pfwine$fixed.acidity,"fixed acidity")
+p2 <- uni_histo(pfwine$volatile.acidity,"volatile acidity")
+p3 <- uni_histo(pfwine$total.sulfur.dioxide,"total sulfur dioxide")
+p4 <- uni_histo(pfwine$sulphates,"sulphates")
+p5 <- uni_histo(pfwine$citric.acid,"citric acid")
+p6 <- uni_histo(pfwine$residual.sugar,"residual sugar") 
+p7 <- uni_histo(pfwine$chlorides,"chlorides") 
+p8 <- uni_histo(pfwine$free.sulfur.dioxide,"free sulfur dioxide")
+p9 <- uni_histo(pfwine$alcohol,"alcohol")
+
+grid.arrange(p1, p2, p3, p4,p5,p6,p7,p8,p9, ncol = 3)
+```
+
+From these histograms above, we can see that density and PH are normal disributed,but other variables seems to be right skew. 
+So we adjust to transform x axis into log10 scale.
+
+```{r echo=FALSE, message=FALSE,  warning=FALSE}
+#create a function to plot histrogram for univariate in log scale
+uni_log <- function(xvariable,labx,xmin,xmax,xinterval)
+{
+  ggplot(data = pfwine, aes(x = xvariable)) + 
+  geom_histogram()+
+  scale_x_log10(breaks = seq(xmin, xmax, xinterval))+
+  xlab(paste(labx," (log10 scale) ",sep=""))
+}
+
+u1 <- uni_log(pfwine$fixed.acidity,"fixed acidity",0,15,3)
+u2 <- uni_log(pfwine$volatile.acidity,"volatile acidity",0.1, 1.5, 0.3)
+u3 <- uni_log(pfwine$total.sulfur.dioxide,"total sulfur dioxide",0, 160, 25)
+u4 <- uni_log(pfwine$sulphates,"sulphates",0.1, 2, 0.3)
+u5 <- uni_log(pfwine$citric.acid,"citric acid",0, 0.76, 0.3)
+u6 <- uni_log(pfwine$residual.sugar,"residual sugar",0, 7, 0.5) 
+u7 <- uni_log(pfwine$chlorides,"chlorides",0, 0.2, 0.01) 
+u8 <- uni_log(pfwine$free.sulfur.dioxide,"free sulfur dioxide",0, 50, 10)
+u9 <- uni_log(pfwine$alcohol,"alcohol",9, 13, 2)
+
+grid.arrange(u1, u2, u3, u4,u5,u6,u7,u8,u9, ncol = 3)
+```
+
+
+From above plots, after x axis change into log10 scale, we can see the varialbe  **fixed.acidity**, **volatile.acidity**, **total.sulfur.dioxide**, and **sulphates** distribution became better, nearly normal distribution. 
+
+Check the output variable **quality** summary.      
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'quality plot'}
+uni_histo(pfwine$quality,"quality")+
+    ggtitle('Distribution of Red Wine by Quality')+
+    theme(plot.title = element_text(size = 12, face = "bold"))
+```
+
+We can see alot of wine value at 5 and 6 .
+We summary the quality of dataset:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'quality summary'}
+summary(pfwine$quality)
+```
+The **quality** value range is 3~8, mean is 5.636, median 6, and 90% wine in the range of 5~6.
+Now,we create a new category variable **quality.level**: 
+Low 0-4,average 5-6, good 7-10.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'divide qulityty level'}
+pfwine$quality.level <- ifelse(pfwine$quality < 5, 'Low', ifelse(
+  pfwine$quality < 7, 'Average', 'Good'))
+pfwine$quality.level <- ordered(pfwine$quality.level,
+                     levels = c('Low', 'Average', 'Good'))
+apply(pfwine,2,function(x){sum(is.na(x))})
+```
+We want to know number of wines in each quality level:
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'summary level'}
+summary(pfwine$quality.level)
+```
+
+
+### What is the structure of your dataset?
+The dataset has 1599 obs, 14 variables:
+
+ "X" ,"fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar",     "chlorides", "free.sulfur.dioxide", "total.sulfur.dioxide", "density", "pH",
+ "sulphates", "alcohol","quality","quality.level"
+
+
+### What is/are the main feature(s) of interest in your dataset?
+In this dataset, the main feature of interest is **quality** of the red wine.
+
+### What other features in the dataset do you think will help support your \investigation into your feature(s) of interest?
+
+The Variable **citric.acid**,**pH** seems to be an intersting. We will explore their relationship with **quality** in next bivariate part.
+
+### Did you create any new variables from existing variables in the dataset?
+We creare a new variable "quality.level", which is a category variable.
+
+### Of the features you investigated, were there any unusual distributions? \Did you perform any operations on the data to tidy, adjust, or change the form \of the data? If so, why did you do this?
+
+I using log10 to scale x axis to reduce the right shew.
+
+
+
+# Bivariate Plots Section
+
+We want find out which attributes have strong relationship with **quality** .
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine[c(2:12)],pfwine$quality)
+```
+
+From above, we can pick those four attributes which are more relative with quality, their correlation values are:
+
+volatile.acidity  -0.3905578 
+
+citric.acid  0.2263725
+
+sulphates  0.0.2513971
+
+alcohol    0.4761663 
+
+Now we plot those four variables with **quality**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#create a function to plot boxplot for bivariate
+bi_box <- function(xvariable,yvariable,labx,laby)
+{
+  ggplot(aes(factor(xvariable), yvariable), data = pfwine) + 
+  geom_jitter( alpha = 0.1)+
+  geom_boxplot( alpha = 0.5)+
+  xlab(labx) +
+  ylab(laby)+
+  #ggtitle(paste(labx," vs. ",laby,sep=""))
+  ggtitle(paste("Relationship between ",labx," and ",laby,sep=""))+
+  theme(plot.title = element_text(size = 10, face = "bold"))
+}
+#the four picked variables plots.
+pb1 <- bi_box(pfwine$quality,pfwine$volatile.acidity,
+              "quality","volatile acidity")
+pb2 <- bi_box(pfwine$quality, pfwine$citric.acid,"quality","citric acid")
+pb3 <- bi_box(pfwine$quality, pfwine$sulphates,"quality","sulphates")
+pb4 <- bi_box(pfwine$quality, pfwine$alcohol,"quality","alcohol")
+
+grid.arrange(pb1,pb2,pb3,pb4,ncol = 2)
+```
+
+We can see **volatile.acidity** decrease with the increase of output variable **quality**. And **citric.acid**,**sulphates**,**alcohol** increase with the increase of **quality**.
+
+we can also change the plot into **quality.level**.it will show more clear tend.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#create a function to plot boxplot for bivariate fill with quality.level
+bi_fillbox <- function(xvariable,yvariable,labx,laby)
+{
+  ggplot(aes(factor(xvariable), yvariable,fill=quality.level), data = pfwine) + 
+ # geom_jitter( alpha = 0.3)+
+  geom_boxplot( alpha = 0.5)+
+  xlab(labx) +
+  ylab(laby)+
+  #ggtitle(paste(labx," vs. ",laby,sep=""))+
+  ggtitle(paste("Relationship between ",labx," and ",laby,sep=""))+
+  theme(legend.position="none")+
+  theme(plot.title = element_text(size = 10, face = "bold"))
+}
+#plot four piced variables
+fb1 <- bi_fillbox(pfwine$quality.level,pfwine$volatile.acidity,
+                  "quality level","volatile acidity")
+fb2 <- bi_fillbox(pfwine$quality.level, pfwine$citric.acid,
+                  "quality level","citric acid")
+fb3 <- bi_fillbox(pfwine$quality.level, pfwine$sulphates,"quality level","sulphates")
+fb4 <- bi_fillbox(pfwine$quality.level, pfwine$alcohol,"quality level","alcohol")
+
+grid.arrange(fb1,fb2,fb3,fb4,ncol = 2)
+```
+
+Good quality wine has lower **volatile.acidity**, and higher **citric.acid**,**sulphates**,**alcohol** 
+
+
+Now, We will calculate other variables correlations with each other. 
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'plot cor'}
+#calculate correlation value
+rwcor <- cor(pfwine[c(1:11,12)])
+# Draw a correlation matrix
+corrplot(rwcor, method = 'square', order = "hclust", 
+         tl.col = "black", tl.cex = 0.8, tl.offset = 1
+         )
+```
+
+
+Based on the correlation matrix:
+**fixed.acidity** is highly positively correlated with **citric.acid** and **density**.
+**free.sulful.dioxide** is highly positively correlated with**total.sulfur.dioxide** . 
+**fixed.acidity** is highly negatively correlated with**pH** . 
+**citric.acid** is correlated negatively with **volatile.acidity** and **pH**. 
+
+
+We want to pick out four pairs of them to do our further explor:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#create function to plot bivarates
+plot_bi <- function(xvariable,yvariable,labx,laby)
+{
+  ggplot(data = pfwine, aes(x = xvariable, y = yvariable)) + 
+    geom_jitter(alpha=0.5,stat = 'summary')+
+    geom_smooth(aes(x=xvariable,y=yvariable), size=0.8)+
+    xlab(labx) +
+    ylab(laby)+
+    #ggtitle(paste(labx," vs. ",laby ,sep=""))
+    ggtitle(paste("Relationship between ",labx," and ",laby,sep=""))+
+    theme(plot.title = element_text(size = 12, face = "bold"))
+}
+```
+
+
+**1. citric acid~volatile acidity **
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$citric.acid,pfwine$volatile.acidity)  #calculate correlation value
+```
+
+That means them have strong negative relationship.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_bi(pfwine$volatile.acidity,pfwine$citric.acid,
+        "volatile acidity","citric acid")
+
+```
+
+The **citric.acid**decreases with the increasing of **volatile.acidity**, specialiy when the **volatile.acidity** value less than 0.6.
+
+
+**2. citric acid~pH **
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$citric.acid,pfwine$pH)  #calculate correlation value
+```
+
+That means them have negative relationship.
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'citric.acid~pH bi'}
+plot_bi(pfwine$citric.acid,pfwine$pH,"citric acid","pH")
+```
+
+The **pH** attribute grow higher with the decreasing of **citric.acid**. 
+
+
+**3.fixed acidity~density**
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$fixed.acidity,pfwine$density)  #calculate correlation value
+```
+
+That means them have positive relationship.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_bi(pfwine$fixed.acidity,pfwine$density,"fixed acidity","density")
+```
+
+The **fixed.acidity** increases with the increasing of **density**.
+
+
+**4. fixed acidity~citric acid**
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$fixed.acidity,pfwine$citric.acid)  #calculate correlation value
+```
+
+That means them have positive relationship.
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'fixed.acidity~citric.acid bi'}
+plot_bi(pfwine$fixed.acidity,pfwine$citric.acid ,"fixed acidity","citric acid")
+```
+
+The **citric.acid** increases with the increasing of **fixed.acidity**.
+
+
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+**volatile.acidity** decrease with the increase of output variable **quality**. And **citric.acid**,**sulphates**,**alcohol** increase with the increase of **quality**.
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+1.The **citric.acid**decreases with the increasing of ** volatile.acidity**, specialiy when the **volatile.acidity** value less than 0.6.
+2.The **pH** attribute grow higher with the decreasing of **citric.acid**. 
+3.The **fixed.acidity** increases with the increasing of ** density**.
+4.The **citric.acid** increases with the increasing of ** fixed.acidity**.
+
+
+
+### What was the strongest relationship you found?
+
+The stringest relationship we found is : fixed.acidity~citric.acid，correlations=0.672
+
+
+# Multivariate Plots Section
+From last part **Bivariate Analysis**, we explored four pairs variables. Now we want to further explored those four pairs varialbes not only about their relationship between them, but also want to see how the different **quality.level** act in those relationships.
+
+We create some fucntions to help our explor at first.
+```{r echo=FALSE, message=FALSE, warning=FALSE, 'functions'}
+#create function to plot multivariate
+plot_mul <- function(xvariable,yvariable,labx,laby)
+{
+  ggplot(data = pfwine, aes(x = xvariable, y = yvariable,fill=quality.level)) + 
+    geom_jitter(aes(color=quality.level),stat = 'summary')+
+    #geom_jitter(stat = 'summary')+
+    geom_smooth(aes(x=xvariable,y=yvariable,color=quality.level),
+                method='auto',col="blue", size=0.8)+
+    xlab(labx) +
+    ylab(laby)+
+    #ggtitle(paste(labx," vs. ",laby," with quality level",sep=""))
+    ggtitle(paste("Relationship between ",labx," and ",laby," with quality level",sep=""))+
+     theme(plot.title = element_text(size = 12, face = "bold"))
+  
+}
+
+# plot boxplot
+plot_mul_box <-function(xvariable,yvariable,labx,laby)
+{
+  ggplot(data = pfwine, aes(x = xvariable, 
+                            y = yvariable, fill =quality.level)) + 
+    geom_boxplot()+
+    xlab(labx) +
+    ylab(laby)+
+    #ggtitle(paste(labx," vs. ",laby," with quality level boxplot",sep=""))
+    ggtitle(paste("Relationship between ",labx," and ",laby,
+                  " with quality level (boxplot)",sep=""))+
+    theme(plot.title = element_text(size = 12, face = "bold"))
+  
+}
+
+```
+
+**1. citric.acid~volatile.acidity with quality.level**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul(pfwine$citric.acid,pfwine$volatile.acidity,
+         'citric acid','volatile acidity')
+```
+
+With the increasing of **citric.acid**, Good quality wine has lower **volatile.acidity** value than Average quality wine, and the Low quality wine has higher **volatile.acidity** value than other two. This tendency also can be seen in the boxplot.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul_box(pfwine$citric.acid,pfwine$volatile.acidity,
+             'citric acid','volatile acidity')+
+        scale_x_continuous(limits = c(0.1,0.8), 
+                           breaks = c(0.1,0.2,0.3,0.4,0.5,0.6,0.7))+
+        scale_y_continuous(limits = c(0.1, 1.3), 
+                           breaks = c(0.1,0.3,0.5,0.7,0.9,1.1,1.3))
+```
+
+Good quality wine have **alcohol** value between 10-14 and **volatile.acidity**  between 0.2-0.6; Average quality wine have **alcohol** value between 9-12 and **volatile.acidity** between 0.2-0.8; Low quality  wine have **alcohol** value between 9-12 and **volatile.acidity**  between 0.4-1.2.
+The Good quality wine's **volatile.acidity** value lower than the other two level of wine. 
+
+**2. citric.acid~pH  with quality.level**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul(pfwine$citric.acid,pfwine$pH,'citric acid','pH')
+```
+
+All plots tendency of each quality level very close. We cannot say any quality level is better than other two quality level wine.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul_box(pfwine$citric.acid,pfwine$pH,'citric acid','pH')
+```
+
+The boxplot can show the little differences between those three quality level more clearly. We can see the Good quality wine's **pH** value lower and the **citric.acid** value lower than Average quality wine and Low quality wine.
+
+**3.fixed.acidity~density  with quality.level**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul(pfwine$fixed.acidity,pfwine$density,'fixed acidity','density')
+```
+
+All plots of each quality level very close. We cannot say any quality level is better than other two quality level wine.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul_box(pfwine$fixed.acidity,pfwine$density,'fixed acidity','density')
+```
+
+The boxplot can show the little differences between those three quality level more clearly. We can see the Good quality wine's **fixed.acidity** value lower and the **density** value lower than Average quality wine and Low quality wine. The Average quality wine and Low quality wine have different **fixed.acidity**(Average quality: 11-13; Low quality:5.5-8) ,but the **density** value very close to each other. 
+
+**4. fixed.acidity~citric.acid  with quality.level**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul(pfwine$fixed.acidity,pfwine$citric.acid,'fixed acidity','citric acid')
+```
+
+All kind of quality level lines very close. We cannot say any quality level is better than other two quality level.
+With the increasing of **fixed.acidity**, Good quality wine have higher **citric.acidity** value than Average quality wine, and the Low quality wine have lower **citric.acidity** value value than other two.  This tendency also can be seen in the boxplot.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot_mul_box(pfwine$fixed.acidity,pfwine$citric.acid,
+             'fixed acidity','citric acid')
+```
+ 
+The boxplot above show the same tendency as we explored previously.
+
+
+# Multivariate Analysis
+
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+1.With the increasing of **citric.acid**, Good quality wine has lower **volatile.acidity** value than Average quality wine, and the Low quality wine has higher **volatile.acidity** value than other two.
+
+2. Good quality wine's **pH** value lower and the **citric.acid** value lower than Average quality wine and Low quality wine.
+
+3.Good quality wine's **fixed.acidity** value lower and the **density** value lower than Average quality wine and Low quality wine.
+
+4. Good quality wine have higher **fixed.acidity** value than Average quality wine, and the Low quality wine have lower **fixed.acidity** value value than other two. 
+
+
+### Were there any interesting or surprising interactions between features?
+In the secondary relationships we explored (citric.acid~pH), the tendency lines of each quality levels wine very close to each other. 
+
+------
+
+# Final Plots and Summary
+
+We explor red wine quality dataset in this report. The output variable **quality** is the first variable we want to explor.So we plot its distribution.
+### Plot One
+```{r echo=FALSE, Plot_One}
+uni_histo(pfwine$quality,"quality")+
+    ggtitle('Distribution of Red Wine by Quality')+
+    theme(plot.title = element_text(size = 12, face = "bold"))
+
+```
+
+### Description One
+This histogram clearly reveals that most red wind is on average rating, and most of these 'avearge' red wines have quality value at 5 and 6. 
+
+
+
+### Plot Two
+Because **alcohol** has the highest correlation value with quality, so we want to know their relationship:
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$quality,pfwine$alcohol)  #calculate correlation value
+```
+
+That means them have positive relationship.
+
+```{r echo=FALSE, message=FALSE, Plot_Two_1}
+bi_fillbox(pfwine$quality.level, pfwine$alcohol,"quality level","alcohol")
+```
+
+We also study other variables relationship between each other. and pick out one pair of them (**fixed.acidity**~**citric.acid**), which has the highest correlation value(0.672.) to explore their relationship:
+
+Let's calculate the correlation value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor(pfwine$fixed.acidity,pfwine$citric.acid)  #calculate correlation value
+```
+
+That means them have positive relationship.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Two_2}
+plot_bi(pfwine$fixed.acidity,pfwine$citric.acid ,"fixed acidity","citric acid")
+```
+
+### Description Two
+1. The Good wine has high **acohol** than Average and Low quality level wines.
+2. The **citric.acid** increases with the increasing of ** fixed.acidity**.
+
+### Plot Three
+Now we want to further explored whether the quality of wine has influence on the relationship of **fixed.acidity** and **citric.acid**.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,Plot_Three_1}
+plot_mul(pfwine$fixed.acidity,pfwine$citric.acid,'fixed acidity','citric acid')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,Plot_Three_2}
+plot_mul_box(pfwine$fixed.acidity,pfwine$citric.acid,
+             'fixed acidity','citric acid')
+```
+ 
+
+### Description Three
+Good quality wine have higher **fixed.acidity** value than Average quality wine, and the Low quality wine have lower **fixed.acidity** value value than other two.
+
+------
+
+# Reflection
+
+
+When I began to exploration of this red wine dataset, I want to know the average level of wine quality, and found out most wine at level 5,6. While  **volatile.acidity**,**citric.acid **,**sulphates** and **alcohol** are more relative with quality.
+I catagory red wine **quality** into three qulity level: Low 3-4 (63 wine samples ), Average 5-6  (1319 wine samples ), Good 7-8 (217 wine samples ).
+
+Then I found those four pairs have strong relationships:
+citric.acid~volatile.acidity
+citric.acid~pH
+fixed.acidity~density,
+fixed.acidity~citric.acid
+
+
+
+At last, I explore the above four pairs attributes with quality level.And I found the different quality level has different activity. For example,With the increasing of **citric.acid**, Good quality wine has lower **volatile.acidity** value than Average quality wine, and the Low quality wine has higher **volatile.acidity** value than Low level and Average quality level. 
+
+Because the sample size of Low level wine and Good level wine not enough to predict whether some attribute really have strong effect each other. So, in the futher I hope can get more data to explore those two levels.
+
+Resource:
+
+https://s3.amazonaws.com/udacity-hosted-downloads/ud651/wineQualityInfo.txt
+
+https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html
+
+https://stackoverflow.com/questions/7201341/how-can-two-strings-be-concatenated
+
+http://adv-r.had.co.nz/Style.html
+
+https://support.rstudio.com/hc/en-us/articles/200549016-Customizing-RStudio#editing
+
+http://www.cookbook-r.com/Graphs/Legends_(ggplot2)/
